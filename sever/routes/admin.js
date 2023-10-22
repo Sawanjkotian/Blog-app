@@ -5,7 +5,31 @@ const User = require('../Model/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-const adminLayout = '../views/layout/admin'
+
+const adminLayout = '../views/layout/admin';
+const jwtSecret = process.env.JWT_SECRET;
+
+/**
+ * CHECK Login
+ */
+const authMiddleware = (req, res, next) =>{
+    const token = req.cookies.token;
+
+    if(!token){
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    try{
+        const decoded = jwt.verify(token, jwtSecret);
+        req.userId = decoded.userId;
+        next();
+    }catch(error){
+        res.status(401).json( { message:'Unauthorized' } )
+    }
+}
+
+
+
 /**
  * GET/
  * Admin - Login Page
@@ -31,31 +55,78 @@ router.get('/admin', async (req, res) =>{
  * Admin - Check Login
  */
 
-
  router.post('/admin', async (req, res) =>{
 
     try{ 
         
         const {username, password} = req.body;
 
-        if(req.body.username === 'admin' && req.body.password === 'password')
-        {
-            res.send('You are logged in.')
-        }
-        else{
-            res.send('Wrong username or password');
+        const user = await User.findOne({username});
+
+        if(!user){
+            return res.status(401).json({message:'Invalid Credentials'});
         }
 
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
-        console.log(req.body);
-        res.redirect('/admin');
+        if(!isPasswordValid){
+            return res.status(401).json({ message: 'Invalid credentials'});
+        }
 
-        // res.render('admin/index', {locals, layout: adminLayout});
+        const token = jwt.sign({ userId: user._id}, jwtSecret);
+        res.cookie('token', token, {httpOnly: true});
+
+        res.redirect('/dashboard')
 
     }catch(error){
         console.log('Error getting data') 
     }
 });
+
+router.get('/dashboard', authMiddleware, async(req, res)=>{
+
+
+    try{
+        const locals = {
+            title:'Dashboard',
+            description:'Simple Blog created with NodeJs, Express & MongoDB'
+            
+        }
+        const data = await Post.find();
+        res.render('admin/dashboard', {
+            locals,
+            data
+        });
+
+    } catch(error){
+
+    }
+})
+
+//  router.post('/admin', async (req, res) =>{
+
+//     try{ 
+        
+//         const {username, password} = req.body;
+
+//         if(req.body.username === 'admin' && req.body.password === 'password')
+//         {
+//             res.send('You are logged in.')
+//         }
+//         else{
+//             res.send('Wrong username or password');
+//         }
+
+
+//         console.log(req.body);
+//         res.redirect('/admin');
+
+//         // res.render('admin/index', {locals, layout: adminLayout});
+
+//     }catch(error){
+//         console.log('Error getting data') 
+//     }
+// });
 
 /**
  * POST/
